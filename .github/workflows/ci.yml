@@ -15,7 +15,7 @@ jobs:
     name: Instalador y suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: shellcheck del instalador
         run: shellcheck -S warning setup-testing.sh
@@ -23,7 +23,7 @@ jobs:
       - name: sintaxis bash
         run: bash -n setup-testing.sh
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -133,7 +133,7 @@ jobs:
     name: Documentos del estándar
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Las skills y los agentes tienen frontmatter válido
         run: |
