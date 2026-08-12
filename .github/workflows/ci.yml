@@ -1,0 +1,159 @@
+name: CI
+
+# El kit lo instalan varios repos del equipo: si el instalador se rompe, se
+# rompe en todos a la vez. Este workflow lo instala de verdad en un proyecto
+# de prueba y corre la suite que instala.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  instalador:
+    name: Instalador y suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck del instalador
+        run: shellcheck -S warning setup-testing.sh
+
+      - name: sintaxis bash
+        run: bash -n setup-testing.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Proyecto de prueba mínimo: una página estática servida en :5173.
+      - name: Armar proyecto de prueba
+        run: |
+          mkdir -p /tmp/app/public
+          cd /tmp/app
+          git init -q .
+          cat > package.json <<'EOF'
+          { "name": "app-ci", "version": "1.0.0",
+            "scripts": { "dev": "python3 -m http.server 5173 --directory public" } }
+          EOF
+          touch vite.config.ts
+          cat > public/index.html <<'EOF'
+          <!doctype html><html lang="es"><head><meta charset="utf-8">
+          <title>App CI</title></head>
+          <body><main><h1>Hola</h1><p>ok</p></main></body></html>
+          EOF
+
+      - name: Instalar el kit
+        run: bash "$GITHUB_WORKSPACE/setup-testing.sh" /tmp/app
+
+      - name: La instalación quedó completa
+        working-directory: /tmp/app
+        run: |
+          set -e
+          for f in playwright.config.ts TESTING_STANDARDS.md AGENTS.md PROMPTS.md \
+                   tests/e2e/smoke.spec.ts tests/e2e/fixtures/index.ts \
+                   tests/e2e/_helpers/session.ts tests/e2e/_helpers/red.ts \
+                   tests/e2e/_helpers/datos.ts tests/e2e/_helpers/evidencia.ts \
+                   .claude/testing-kit.version; do
+            [ -f "$f" ] || { echo "🔴 falta $f"; exit 1; }
+          done
+          for s in human-tester explore-app generate-playwright-tests self-heal-tests \
+                   enforce-standards team-onboarding regression-suite; do
+            [ -f ".claude/skills/$s/SKILL.md" ] || { echo "🔴 falta skill $s"; exit 1; }
+          done
+          for a in explorer-agent test-writer-agent healer-agent reviewer-agent; do
+            [ -f ".claude/agents/$a.md" ] || { echo "🔴 falta agente $a"; exit 1; }
+          done
+          grep -q 'forbidOnly'      playwright.config.ts
+          grep -q 'retain-on-failure' playwright.config.ts
+          grep -q 'testIdAttribute'   playwright.config.ts
+          grep -qxF '.e2e-secrets.local' .gitignore
+          echo "✅ instalación completa"
+
+      - name: El instalador es idempotente
+        run: |
+          salida="$(bash "$GITHUB_WORKSPACE/setup-testing.sh" /tmp/app --sin-npm)"
+          echo "$salida"
+          echo "$salida" | grep -q 'Creados:     0' || { echo "🔴 no es idempotente"; exit 1; }
+
+      - name: Typecheck de helpers, fixtures y ejemplos
+        working-directory: /tmp/app
+        run: |
+          npm install -D typescript@5 @types/node >/dev/null 2>&1
+          cat > tsconfig.json <<'EOF'
+          { "compilerOptions": { "target": "ES2022", "module": "ESNext",
+            "moduleResolution": "bundler", "strict": true, "noEmit": true,
+            "skipLibCheck": true, "types": ["node"], "lib": ["ES2022", "DOM"] },
+            "include": ["tests/**/*.ts", "playwright.config.ts"] }
+          EOF
+          # El spec de referencia es el que copian los agentes: tiene que compilar.
+          python3 - <<'PY'
+          import re
+          src = open("tests/e2e/REFERENCIA.md").read()
+          m = re.search(r"````ts\n(.*?)\n````", src, re.S)
+          open("tests/e2e/_referencia-check.ts", "w").write(m.group(1))
+          PY
+          npx tsc --noEmit
+          rm tests/e2e/_referencia-check.ts
+          echo "✅ typecheck limpio"
+
+      # En ubuntu-latest el navegador necesita libs del sistema que el
+      # instalador no puede poner (pide sudo). En una máquina de desarrollo
+      # el `npx playwright install chromium` del instalador alcanza.
+      - name: Navegador con dependencias del sistema
+        working-directory: /tmp/app
+        run: npx playwright install --with-deps chromium
+
+      - name: La suite instalada pasa
+        working-directory: /tmp/app
+        run: npx playwright test --reporter=list
+
+      # El estándar exige verificar que los tests PUEDEN fallar. Se lo aplicamos
+      # al propio kit: rompemos la app y las guardas tienen que ponerse rojas.
+      - name: Los tests fallan cuando la app se rompe
+        working-directory: /tmp/app
+        run: |
+          cat > public/index.html <<'EOF'
+          <!doctype html><html lang="es"><head><meta charset="utf-8">
+          <title>Rota</title></head>
+          <body><div>sin landmark ni heading</div>
+          <script>noExiste.metodo();</script></body></html>
+          EOF
+          if npx playwright test --reporter=line >/tmp/salida.txt 2>&1; then
+            echo "🔴 la suite pasó con la app rota — las guardas no sirven"
+            cat /tmp/salida.txt
+            exit 1
+          fi
+          grep -q 'noExiste is not defined' /tmp/salida.txt \
+            || { echo "🔴 no se detectó el error de consola"; cat /tmp/salida.txt; exit 1; }
+          echo "✅ las guardas detectan la app rota"
+
+  documentos:
+    name: Documentos del estándar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Las skills y los agentes tienen frontmatter válido
+        run: |
+          set -e
+          fallos=0
+          for f in .claude/skills/*/SKILL.md .claude/agents/*.md; do
+            head -1 "$f" | grep -qx -- '---' || { echo "🔴 $f: sin frontmatter"; fallos=1; }
+            grep -qm1 '^name: '        "$f" || { echo "🔴 $f: sin 'name'"; fallos=1; }
+            grep -qm1 '^description: ' "$f" || { echo "🔴 $f: sin 'description'"; fallos=1; }
+          done
+          [ "$fallos" = 0 ] && echo "✅ frontmatter válido en skills y agentes"
+          exit "$fallos"
+
+      - name: El kit no predica lo que no cumple
+        run: |
+          # Las prohibiciones del estándar no pueden aparecer como código de
+          # ejemplo en los templates que se instalan.
+          set -e
+          if grep -rn 'waitForTimeout\|networkidle' templates/ --include="*.ts"; then
+            echo "🔴 los templates usan una espera prohibida por el estándar"
+            exit 1
+          fi
+          echo "✅ los templates cumplen el estándar"
