@@ -1,0 +1,77 @@
+# Changelog
+
+Formato: [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
+Versionado semántico aplicado al **kit**, no a los tests que genera.
+
+Qué significa cada tipo de cambio acá:
+
+- **MAYOR** — cambia el estándar de forma incompatible (una regla nueva deja
+  tests existentes fuera de norma, o cambia la estructura de carpetas).
+- **MENOR** — skills, agentes o helpers nuevos; reglas nuevas que no invalidan
+  lo ya escrito.
+- **PARCHE** — correcciones, redacción, mejoras del instalador.
+
+Al actualizar el kit en un repo, `.claude/testing-kit.version` dice de qué
+versión venís y el instalador avisa el salto.
+
+---
+
+## [1.0.0] — 2026-08-12
+
+Primera versión. Sistema completo de testing agentic para frontend.
+
+### Agregado
+
+**Skills** (`.claude/skills/`)
+- `human-tester` — punto de entrada, orquesta el ciclo completo
+- `explore-app` — exploración en navegador real, produce el mapa del flujo
+- `generate-playwright-tests` — genera tests desde el mapa
+- `self-heal-tests` — diagnostica y repara, distinguiendo test roto de app rota
+- `enforce-standards` — auditoría del estándar, 12 verificaciones
+- `regression-suite` — mantenimiento de la suite y caza de flakiness
+- `team-onboarding` — entorno andando en minutos
+
+**Agentes** (`.claude/agents/`)
+- `explorer-agent`, `test-writer-agent`, `healer-agent`, `reviewer-agent`
+- `reviewer-agent` sin permiso de escritura, a propósito
+
+**Estándar**
+- `TESTING_STANDARDS.md` — escalera de selectores, anti-flakiness, naming,
+  niveles de suite, Definition of Done
+- `AGENTS.md` — contrato de cada agente
+- `PROMPTS.md` — 12 prompts de uso diario
+- `CLAUDE.md` — se instala en el repo destino
+
+**Infraestructura de tests** (`templates/`)
+- `playwright.config.ts` con los mínimos del estándar
+- Helpers: `session`, `evidencia`, `red`, `datos`
+- Fixtures con guardas automáticas de errores de consola y respuestas 5xx
+- `smoke.spec.ts` — valida el entorno recién instalado
+- `REFERENCIA.md` — spec de referencia anotado
+
+**Instalador**
+- `setup-testing.sh` idempotente, con `--dry-run`, `--sin-npm`, `--forzar`
+- Detecta framework y puerto desde `package.json` y los configs
+- Nunca pisa archivos existentes sin avisar; deja `.bak`
+- Marca la versión instalada en `.claude/testing-kit.version`
+- Probado en bash 3.2 (el que trae macOS) y bash 5
+
+**CI**
+- Instala el kit en un proyecto de prueba y corre la suite que instala
+- Verifica idempotencia, typecheck y frontmatter de skills y agentes
+- Rompe la app a propósito y exige que las guardas se pongan rojas
+
+### Decisiones de diseño
+
+- **Rol accesible por encima de `data-testid`.** `data-testid` es obligatorio
+  donde no hay semántica estable (filas, celdas, estados, textos formateados),
+  pero el peldaño 1 es `getByRole`: hace que el test verifique lo mismo que
+  percibe alguien usando un lector de pantalla.
+- **`retries: 1` en CI, no 2.** Dos retries esconden flakiness en vez de
+  resolverla.
+- **El healer no puede tocar aserciones.** Puede cambiar cómo un test alcanza
+  un elemento, nunca qué afirma. Sin ese límite, la suite se convierte en
+  decoración.
+- **Las fixtures de consola y 5xx no son `auto` por defecto.** Activarlas de
+  golpe sobre una suite existente pone en rojo tests que hoy pasan sobre
+  errores preexistentes. Se activan cuando esa deuda está saldada.
