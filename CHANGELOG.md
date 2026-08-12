@@ -16,6 +16,30 @@ versión venís y el instalador avisa el salto.
 
 ---
 
+## [1.0.1] — 2026-08-12
+
+Correcciones salidas de la primera instalación real (`gestion-empresarial-front`).
+
+### Corregido
+
+- **El instalador ya no pisa `.e2e-secrets.local.example`.** Estaba marcado
+  como "sobrescribir siempre", pero es un archivo específico de cada proyecto:
+  documenta qué credenciales necesita *esa* app y cómo se llaman sus variables.
+  Al instalar sobre un repo que ya lo tenía, se perdió documentación que el kit
+  no puede reponer (el realm, y que el usuario debe existir además en el ERP o
+  el permiso da 403). Ahora se respeta el existente, como el resto de los
+  archivos del proyecto.
+
+### Agregado
+
+- **Aviso cuando `.claude/` está gitignoreado.** Varios repos lo ignoran entero
+  por los worktrees y los ajustes locales. Con eso, las skills y los agentes
+  quedan sólo en la máquina de quien instaló y el estándar deja de ser del
+  equipo. El instalador lo detecta y da el patrón exacto para destapar sólo lo
+  compartido, sin dejar de ignorar lo local.
+
+---
+
 ## [1.0.0] — 2026-08-12
 
 Primera versión. Sistema completo de testing agentic para frontend.

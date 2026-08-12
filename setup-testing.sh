@@ -220,7 +220,7 @@ copiar templates/tests/e2e/_helpers/datos.ts     tests/e2e/_helpers/datos.ts
 copiar templates/tests/e2e/fixtures/index.ts     tests/e2e/fixtures/index.ts
 copiar templates/tests/e2e/REFERENCIA.md         tests/e2e/REFERENCIA.md --siempre
 copiar templates/tests/e2e/smoke.spec.ts         tests/e2e/smoke.spec.ts
-copiar templates/.e2e-secrets.local.example      .e2e-secrets.local.example --siempre
+copiar templates/.e2e-secrets.local.example      .e2e-secrets.local.example
 
 [ "$DRY_RUN" = 0 ] && { [ -f docs/qa/mapa/.gitkeep ] || touch docs/qa/mapa/.gitkeep; \
                         [ -f docs/qa/reportes/.gitkeep ] || touch docs/qa/reportes/.gitkeep; }
@@ -317,6 +317,19 @@ else
     if git -C "$DESTINO" ls-files --error-unmatch .e2e-secrets.local >/dev/null 2>&1; then
       error "PARAR: .e2e-secrets.local está TRACKEADO en git. Sacalo ya:"
       error "  git rm --cached .e2e-secrets.local"
+    fi
+
+    # Muchos repos ignoran `.claude/` entero por los worktrees y los ajustes
+    # locales. Con eso, las skills y los agentes quedan sólo en la máquina de
+    # quien instaló: el estándar deja de ser del equipo.
+    if git -C "$DESTINO" check-ignore -q .claude/skills 2>/dev/null; then
+      aviso ".claude/ está gitignoreado: el estándar NO se va a versionar."
+      printf '%s   Reemplazá `.claude/` por esto en .gitignore:%s\n' "$GRIS" "$FIN"
+      printf '%s     .claude/*%s\n' "$GRIS" "$FIN"
+      printf '%s     !.claude/skills/%s\n' "$GRIS" "$FIN"
+      printf '%s     !.claude/agents/%s\n' "$GRIS" "$FIN"
+      printf '%s     !.claude/testing-kit.version%s\n' "$GRIS" "$FIN"
+      PENDIENTES+=("Destapar .claude/skills, .claude/agents y .claude/testing-kit.version en .gitignore")
     fi
   fi
 fi
