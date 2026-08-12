@@ -16,7 +16,7 @@ El kit se clona **una vez** por máquina; desde ahí se instala en todos los
 proyectos que quieras.
 
 ```bash
-git clone git@github.com:ORG/agentic-testing.git ~/dev/agentic-testing
+git clone https://github.com/skn-alarmas/agentic-testing.git ~/dev/agentic-testing
 bash ~/dev/agentic-testing/setup-testing.sh /ruta/a/tu/repo
 ```
 

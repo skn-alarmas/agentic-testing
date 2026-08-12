@@ -147,7 +147,7 @@ va a producir tests frágiles. Listalos como pendientes.
 |---|---|---|---|---|
 | 1 | `checkout.spec.ts:45` | §3 esperas | `await page.waitForTimeout(3000)` | `await expect(page.getByTestId("estado-orden")).toHaveText("Confirmada")` |
 | 2 | `facturas.spec.ts:12` | §2 selectores | `page.locator(".tabla tr:nth-child(2)")` | `page.getByTestId("fila-factura-12345")` — falta el testid en `src/TablaFacturas.tsx:34` |
-| 3 | `login.spec.ts:8` | §7 secretos | `password: "Alarmas2026"` | `process.env.E2E_KC_PASS` |
+| 3 | `login.spec.ts:8` | §7 secretos | `password: "<credencial en duro>"` | `process.env.E2E_PASS` |
 
 ## 🟡 Advertencias
 | # | Archivo:línea | Regla | Qué |

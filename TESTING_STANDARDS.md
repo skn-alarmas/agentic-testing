@@ -151,7 +151,7 @@ Se marca `test.fixme` con link al hallazgo y se arregla; no se le suben retries.
 /**
  * E2E de <Flujo> — <ruta> — <ticket>.
  *
- * Cadena real que ejercita: front :5175 → /api → BFF :3110 → ORDS → DB.
+ * Cadena real que ejercita: front :5173 → /api → backend :3100 → DB.
  * Requisitos para correr: <qué tiene que estar levantado, qué credenciales>.
  *
  * Mapa de exploración: docs/qa/mapa/<flujo>.md
