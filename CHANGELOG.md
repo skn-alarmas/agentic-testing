@@ -11,8 +11,78 @@ Qué significa cada tipo de cambio acá:
   lo ya escrito.
 - **PARCHE** — correcciones, redacción, mejoras del instalador.
 
-Al actualizar el kit en un repo, `.claude/testing-kit.version` dice de qué
-versión venís y el instalador avisa el salto.
+Al actualizar el kit en un repo, `.claude/testing-kit.version` (frontend) y
+`.claude/backend-testing-kit.version` (backend) dicen de qué versión venís, y el
+instalador avisa el salto.
+
+---
+
+## [1.1.0] — 2026-08-13
+
+Kit de **backend**. El repo pasa a tener dos kits hermanos que se instalan por
+separado: frontend (`setup-testing.sh`) y backend (`setup-backend-testing.sh`).
+
+### Agregado
+
+**Skills de backend** (`.claude/skills/`)
+- `backend-rigorous-tester` — punto de entrada, orquesta el ciclo completo
+- `api-contract-validator` — valida (o genera) el contrato OpenAPI
+- `security-penetration-tester` — catálogo OWASP API sobre endpoints propios
+- `data-integrity-guardian` — transacciones, estados, agregados, concurrencia
+- `negative-edge-case-generator` — casos negativos y de borde, sistemáticos
+- `backend-self-heal` — diagnóstico y reparación con tres causas posibles
+- `backend-standards-enforcer` — 15 verificaciones de la norma
+- `backend-onboarding` — entorno andando en minutos
+
+**Agentes de backend** (`.claude/agents/`)
+- `api-explorer-agent`, `contract-enforcer-agent`, `security-attacker-agent`,
+  `data-chaos-agent`, `backend-healer-agent`, `coverage-critic-agent`
+- `coverage-critic-agent` sin permiso de escritura sobre los tests, a propósito
+
+**Estándar de backend** (`backend/`)
+- `BACKEND_TESTING_STANDARDS.md` — nueve dimensiones, aserción de tres capas,
+  control positivo, tabla canónica de códigos HTTP, DoD
+- `BACKEND_AGENTS.md`, `BACKEND_PROMPTS.md` (13 prompts), `CLAUDE.md`
+
+**Infraestructura de tests** (`templates-backend/`)
+- `vitest.config.ts` con los mínimos del estándar
+- Helpers: `entorno` (guardarraíl anti-producción), `cliente` (roles, evidencia
+  redactada), `auth` (tokens legítimos y adversarios), `contrato` (validación
+  estricta contra OpenAPI), `db` (fuente de verdad), `datos`, `payloads`
+  (corpus hostil), `concurrencia`
+- Fixtures con limpieza automática de lo creado
+- `smoke.test.ts` — valida el entorno, incluido el propio guardarraíl
+- `REFERENCIA.md` — spec de referencia anotado
+
+**Instalador**
+- `setup-backend-testing.sh`, idempotente, con `--dry-run`, `--sin-npm`,
+  `--forzar`. Detecta framework, puerto y contrato. Marca la versión en
+  `.claude/backend-testing-kit.version`
+
+**CI**
+- Job de backend: instala el kit contra una API de prueba, corre la suite,
+  verifica idempotencia y typecheck, y **rompe la API a propósito** para exigir
+  que las guardas se pongan rojas
+
+### Decisiones de diseño
+
+- **`200 OK` no es evidencia.** Los tests que escriben afirman en tres capas:
+  respuesta → contrato → fuente de verdad. Un 201 devuelto antes del commit se
+  ve idéntico a uno correcto.
+- **Todo test de rechazo lleva control positivo.** Es la versión backend de "un
+  test que no puede fallar no está probando nada": un test de seguridad contra
+  una ruta mal escrita pasa en verde probando nada, y el verde se ve idéntico.
+- **La cobertura es una matriz, no un porcentaje.** Nueve dimensiones por
+  endpoint. Se puede tener 90 % de líneas y cero tests de autorización.
+- **`retry: 0` también en CI**, a diferencia del kit de frontend. Una llamada
+  HTTP no tiene la variabilidad de un navegador: acá un retry esconde una carrera.
+- **Validación de contrato estricta por defecto** (`additionalProperties: false`
+  forzado). Es lo que detecta los campos internos filtrados.
+- **El guardarraíl anti-producción corta la corrida**, no avisa. Es lo único
+  que hay entre un test de borrado y los datos reales el día que alguien exporte
+  la variable equivocada.
+- **Sin contrato, D1 no se marca cubierta.** `API_CONTRATO=ninguno` es una deuda
+  declarada, no una opción.
 
 ---
 
