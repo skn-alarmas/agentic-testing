@@ -129,6 +129,264 @@ jobs:
             || { echo "🔴 no se detectó el error de consola"; cat /tmp/salida.txt; exit 1; }
           echo "✅ las guardas detectan la app rota"
 
+  instalador-backend:
+    name: Instalador de backend y suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: shellcheck del instalador
+        run: shellcheck -S warning setup-backend-testing.sh
+
+      - name: sintaxis bash
+        run: bash -n setup-backend-testing.sh
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      # API de prueba mínima, sin dependencias. Devuelve a propósito un campo
+      # que el contrato NO declara: es lo que la validación estricta debe cazar.
+      - name: Armar API de prueba
+        run: |
+          mkdir -p /tmp/api
+          cd /tmp/api
+          git init -q .
+          cat > package.json <<'EOF'
+          { "name": "api-ci", "version": "1.0.0", "type": "module",
+            "scripts": { "dev": "node servidor.js --port 4310" } }
+          EOF
+          cat > servidor.js <<'JS'
+          import { createServer } from "node:http";
+          const FUGA = process.env.ROMPER_FUGA === "1";
+          const json = (res, code, obj, headers = {}) => {
+            res.writeHead(code, { "content-type": "application/json", ...headers });
+            res.end(JSON.stringify(obj));
+          };
+          createServer((req, res) => {
+            const url = new URL(req.url, "http://x");
+            if (url.pathname === "/api/salud" && req.method === "GET") return json(res, 200, { estado: "ok" });
+            if (url.pathname === "/api/salud") return json(res, 405, { codigo: "METODO_NO_PERMITIDO" });
+            if (url.pathname === "/api/privado") {
+              if (!req.headers.authorization) return json(res, 401, { codigo: "NO_AUTENTICADO" });
+              return json(res, 200, { ok: true });
+            }
+            if (url.pathname === "/api/facturas" && req.method === "POST")
+              return json(res, 201, { id: 7, monto: 1500.5, estado: "PENDIENTE", costoInterno: 900 },
+                          { location: "/api/facturas/7" });
+            if (url.pathname === "/api/facturas/7" && req.method === "GET")
+              return json(res, 200, { id: 7, monto: 1500.5, estado: "PENDIENTE" });
+            if (FUGA) { res.writeHead(404, { "content-type": "application/json" });
+                        return res.end(JSON.stringify({ error: "not found", stack: "at /app/servidor.js:42:11" })); }
+            return json(res, 404, { codigo: "NO_ENCONTRADO" });
+          }).listen(4310);
+          JS
+          cat > openapi.yaml <<'EOF'
+          openapi: 3.0.3
+          info: { title: API de prueba, version: "1.0.0" }
+          paths:
+            /api/facturas:
+              post:
+                responses:
+                  "201":
+                    description: creada
+                    content:
+                      application/json:
+                        schema:
+                          type: object
+                          required: [id, monto, estado]
+                          properties:
+                            id: { type: integer }
+                            monto: { type: number }
+                            estado: { type: string, enum: [PENDIENTE, PAGADA] }
+            /api/facturas/{id}:
+              get:
+                responses:
+                  "200":
+                    description: ok
+                    content:
+                      application/json:
+                        schema:
+                          $ref: "#/components/schemas/Factura"
+          components:
+            schemas:
+              Factura:
+                type: object
+                required: [id, monto, estado]
+                properties:
+                  id: { type: integer }
+                  monto: { type: number }
+                  estado: { type: string }
+          EOF
+
+      - name: Instalar el kit
+        run: bash "$GITHUB_WORKSPACE/setup-backend-testing.sh" /tmp/api
+
+      - name: La instalación quedó completa
+        working-directory: /tmp/api
+        run: |
+          set -e
+          for f in vitest.config.ts BACKEND_TESTING_STANDARDS.md BACKEND_AGENTS.md \
+                   BACKEND_PROMPTS.md tests/api/smoke.test.ts tests/api/setup.ts \
+                   tests/api/fixtures/index.ts tests/api/REFERENCIA.md \
+                   docs/qa/api/cobertura.md .claude/backend-testing-kit.version; do
+            [ -f "$f" ] || { echo "🔴 falta $f"; exit 1; }
+          done
+          for h in entorno cliente auth contrato db datos payloads concurrencia; do
+            [ -f "tests/api/_helpers/$h.ts" ] || { echo "🔴 falta helper $h"; exit 1; }
+          done
+          for s in backend-rigorous-tester api-contract-validator security-penetration-tester \
+                   data-integrity-guardian negative-edge-case-generator backend-self-heal \
+                   backend-standards-enforcer backend-onboarding; do
+            [ -f ".claude/skills/$s/SKILL.md" ] || { echo "🔴 falta skill $s"; exit 1; }
+          done
+          for a in api-explorer-agent contract-enforcer-agent security-attacker-agent \
+                   data-chaos-agent backend-healer-agent coverage-critic-agent; do
+            [ -f ".claude/agents/$a.md" ] || { echo "🔴 falta agente $a"; exit 1; }
+          done
+          grep -q 'retry: 0'     vitest.config.ts
+          grep -q 'globalSetup'  vitest.config.ts
+          grep -qxF '.api-secrets.local' .gitignore
+          echo "✅ instalación completa"
+
+      - name: El instalador es idempotente
+        run: |
+          salida="$(bash "$GITHUB_WORKSPACE/setup-backend-testing.sh" /tmp/api --sin-npm)"
+          echo "$salida"
+          echo "$salida" | grep -q 'Creados:     0' || { echo "🔴 no es idempotente"; exit 1; }
+          [ -f /tmp/api/vitest.api.config.ts ] && { echo "🔴 forkeó un segundo config"; exit 1; }
+          echo "✅ idempotente"
+
+      - name: Typecheck de helpers, fixtures y spec de referencia
+        working-directory: /tmp/api
+        run: |
+          npm install -D typescript@5 @types/node >/dev/null 2>&1
+          cat > tsconfig.json <<'EOF'
+          { "compilerOptions": { "target": "ES2022", "module": "ESNext",
+            "moduleResolution": "bundler", "strict": true, "noEmit": true,
+            "esModuleInterop": true, "skipLibCheck": true,
+            "types": ["node"], "lib": ["ES2022"] },
+            "include": ["tests/**/*.ts", "vitest.config.ts"] }
+          EOF
+          # El spec de referencia es el que copian los agentes: tiene que compilar.
+          python3 - <<'PY'
+          import re
+          src = open("tests/api/REFERENCIA.md").read()
+          m = re.search(r"````ts\n(.*?)\n````", src, re.S)
+          open("tests/api/_referencia-check.ts", "w").write(m.group(1))
+          PY
+          npx tsc --noEmit
+          rm tests/api/_referencia-check.ts
+          echo "✅ typecheck limpio"
+
+      - name: Credenciales y contrato del ambiente de prueba
+        working-directory: /tmp/api
+        run: |
+          cat > .api-secrets.local <<'EOF'
+          API_BASE_URL=http://localhost:4310
+          API_CONTRATO=openapi.yaml
+          API_RUTA_PROTEGIDA=/api/privado
+          API_USER_ADMIN=admin
+          API_PASS_ADMIN=secreto
+          EOF
+
+      # Ejercita el contrato de verdad: $ref, rutas con plantilla, código no
+      # declarado, y el campo que la API filtra y el contrato no declara.
+      - name: Test de contrato sobre la API de prueba
+        working-directory: /tmp/api
+        run: |
+          cat > tests/api/contrato.test.ts <<'TS'
+          /**
+           * Verificación del kit — contrato estricto contra la API de prueba.
+           * Cadena: test → API :4310. Requisitos: servidor levantado.
+           * Dimensiones: D1.
+           */
+          import { test, expect, describe } from "./fixtures";
+
+          describe("Contrato @contrato", () => {
+            test("detecta un campo NO declarado en el contrato", async ({ api, contrato }) => {
+              const res = await api.post("/api/facturas", { cuerpo: { monto: 1 } });
+              expect(res.status).toBe(201);
+              expect(res.headers.location).toBe("/api/facturas/7");
+              expect(() => contrato.verificar("POST", "/api/facturas", 201, res.cuerpo))
+                .toThrowError(/costoInterno/);
+            });
+
+            test("una respuesta que cumple pasa (con $ref y ruta plantilla)", async ({ api, contrato }) => {
+              const res = await api.get("/api/facturas/7");
+              expect(res.status).toBe(200);
+              contrato.verificar("GET", "/api/facturas/7", 200, res.cuerpo);
+            });
+
+            test("un código no declarado es incumplimiento", async ({ api, contrato }) => {
+              const res = await api.post("/api/salud", { cuerpo: {} });
+              expect(res.status).toBe(405);
+              expect(() => contrato.verificar("POST", "/api/salud", 405, res.cuerpo))
+                .toThrowError(/contrato/i);
+            });
+          });
+          TS
+          echo "✅ test de contrato escrito"
+
+      # Arrancar y parar la API. Si el puerto queda tomado por un paso anterior,
+      # el `node` nuevo muere con EADDRINUSE y el viejo sigue respondiendo: el
+      # paso "rompemos la API" pasaría en verde probando la API sana.
+      - name: Helpers de la API de prueba
+        run: |
+          cat > /tmp/api-ctl.sh <<'SH'
+          matar_api() { pkill -f "node servidor.js" 2>/dev/null || true; sleep 1; }
+          esperar_api() {
+            for _ in $(seq 1 40); do
+              curl -sf http://localhost:4310/api/salud >/dev/null && return 0
+              sleep 0.3
+            done
+            echo "🔴 la API de prueba no levantó"; return 1
+          }
+          SH
+
+      - name: La suite instalada pasa
+        working-directory: /tmp/api
+        run: |
+          . /tmp/api-ctl.sh
+          matar_api; node servidor.js & esperar_api
+          npm run test:api
+          npm run test:api:aleatorio          # y pasa en orden aleatorio
+          matar_api
+
+      # El estándar exige verificar que los tests PUEDEN fallar. Se lo aplicamos
+      # al propio kit: rompemos la API y las guardas tienen que ponerse rojas.
+      - name: Los tests fallan cuando la API se rompe
+        working-directory: /tmp/api
+        run: |
+          . /tmp/api-ctl.sh
+          matar_api; ROMPER_FUGA=1 node servidor.js & esperar_api
+          # El servidor correcto tiene que ser el roto, no uno que sobrevivió.
+          curl -s http://localhost:4310/api/nada | grep -q 'stack' \
+            || { echo "🔴 arrancó la API sana: el paso no probaría nada"; exit 1; }
+          if npm run test:api:smoke > /tmp/salida.txt 2>&1; then
+            echo "🔴 la suite pasó con la API filtrando el stack — las guardas no sirven"
+            cat /tmp/salida.txt; exit 1
+          fi
+          grep -q 'no filtra internals' /tmp/salida.txt \
+            || { echo "🔴 falló otra cosa, no la guarda de filtración"; cat /tmp/salida.txt; exit 1; }
+          matar_api
+          echo "✅ las guardas detectan la API rota"
+
+      # Lo único que hay entre un test de borrado y los datos reales.
+      - name: El guardarraíl anti-producción corta la corrida
+        working-directory: /tmp/api
+        run: |
+          . /tmp/api-ctl.sh
+          matar_api; node servidor.js & esperar_api
+          if API_BASE_URL=https://api.miempresa.com npx vitest run > /tmp/prod.txt 2>&1; then
+            echo "🔴 la suite corrió contra una URL de producción"
+            cat /tmp/prod.txt; exit 1
+          fi
+          grep -q 'GUARDARRAÍL' /tmp/prod.txt \
+            || { echo "🔴 no cortó por el guardarraíl"; cat /tmp/prod.txt; exit 1; }
+          matar_api
+          echo "✅ el guardarraíl corta"
+
   documentos:
     name: Documentos del estándar
     runs-on: ubuntu-latest
@@ -153,7 +411,24 @@ jobs:
           # ejemplo en los templates que se instalan.
           set -e
           if grep -rn 'waitForTimeout\|networkidle' templates/ --include="*.ts"; then
-            echo "🔴 los templates usan una espera prohibida por el estándar"
+            echo "🔴 los templates de frontend usan una espera prohibida"
+            exit 1
+          fi
+          # En backend el idioma prohibido es el sleep (`new Promise` + `setTimeout`).
+          # Se permite SÓLO dentro del helper que implementa la espera por
+          # condición (`_helpers/concurrencia.ts`), nunca en un test.
+          if grep -rn 'new Promise([^)]*setTimeout' \
+               templates-backend/tests/api/*.test.ts \
+               templates-backend/tests/api/REFERENCIA.md 2>/dev/null; then
+            echo "🔴 un template de backend duerme en vez de esperar la condición"
             exit 1
           fi
           echo "✅ los templates cumplen el estándar"
+
+      - name: Los dos kits declaran la misma versión
+        run: |
+          set -e
+          v="$(cat VERSION)"
+          grep -q "^## \[$v\]" CHANGELOG.md \
+            || { echo "🔴 VERSION=$v no tiene entrada en CHANGELOG.md"; exit 1; }
+          echo "✅ VERSION $v documentada"
