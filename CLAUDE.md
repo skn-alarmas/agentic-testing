@@ -18,7 +18,7 @@ se revisan en el PR y no dependen de ningún servicio externo.
 | Archivo | Qué define |
 |---|---|
 | `TESTING_STANDARDS.md` | **La norma.** Selectores, esperas, naming, DoD. Ante conflicto, gana este archivo. |
-| `AGENTS.md` | Contrato de cada agente: qué puede y qué no |
+| `docs/qa/CONTRATO-DE-LOS-AGENTES.md` | Contrato de cada agente: qué puede y qué no (en el repo del kit, `AGENTS.md`) |
 | `PROMPTS.md` | Prompts listos para copiar |
 
 ## El ciclo
@@ -46,7 +46,7 @@ Si no sabés cuál usar: **`/human-tester`** y describí lo que querés probar.
 ## Agentes
 
 `explorer-agent` · `test-writer-agent` · `healer-agent` · `reviewer-agent`
-→ contratos completos en `AGENTS.md`.
+→ contratos completos en `docs/qa/CONTRATO-DE-LOS-AGENTES.md`.
 
 ## Las cinco reglas que no se negocian
 

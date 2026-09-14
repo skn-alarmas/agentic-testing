@@ -178,8 +178,9 @@ Qué se pisa y qué no:
 | Se sobrescribe siempre | Nunca se pisa |
 |---|---|
 | Skills y agentes (`.claude/`) | `playwright.config.ts` |
-| `TESTING_STANDARDS.md`, `AGENTS.md`, `PROMPTS.md` | Helpers y fixtures que hayas tocado |
-| `REFERENCIA.md`, `.e2e-secrets.local.example` | Tus specs |
+| `TESTING_STANDARDS.md`, `PROMPTS.md` | Helpers y fixtures que hayas tocado |
+| `docs/qa/CONTRATO-DE-LOS-AGENTES.md`, `REFERENCIA.md` | Tus specs y tu `.e2e-secrets.local.example` |
+| | El `AGENTS.md` y el `CLAUDE.md` del repo |
 
 Si un archivo tuyo difiere del template, el instalador **no lo toca** y te dice
 cómo compararlo. Para forzar la actualización de todo: `--forzar` (deja `.bak`).

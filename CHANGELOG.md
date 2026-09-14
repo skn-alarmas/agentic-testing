@@ -16,6 +16,33 @@ versión venís y el instalador avisa el salto.
 
 ---
 
+## [1.0.2] — 2026-09-14
+
+### Corregido
+
+- **El instalador ya no pisa `AGENTS.md`.** Lo copiaba siempre a la raíz del repo
+  destino, pero `AGENTS.md` es el archivo que Codex, Cursor y Copilot leen como las
+  reglas del proyecto (y Claude Code, cuando `CLAUDE.md` lo importa). Un repo que
+  tuviera sus reglas ahí las perdía en cada actualización del kit, con un `.bak` como
+  único rastro. El contrato de los agentes ahora se instala en
+  `docs/qa/CONTRATO-DE-LOS-AGENTES.md`, al lado de los mapas y los reportes que
+  producen esos agentes.
+- **El README decía que `.e2e-secrets.local.example` se pisa siempre**; desde 1.0.1 se
+  respeta el del proyecto.
+
+### Agregado
+
+- **Avisos sobre `AGENTS.md`**: si el repo no lo tiene, si todavía es la copia vieja del
+  contrato, o si no apunta a `docs/qa/CONTRATO-DE-LOS-AGENTES.md`.
+
+### Migrar desde 1.0.1
+
+Si la primera línea de tu `AGENTS.md` es `# AGENTS.md — Cómo trabajan los agentes de
+testing`, es la copia del contrato que instalaba el kit. Actualizá el kit —el contrato
+queda en `docs/qa/`— y reemplazá `AGENTS.md` por las reglas del repo, o borralo.
+
+---
+
 ## [1.0.1] — 2026-08-12
 
 Correcciones salidas de la primera instalación real (`gestion-empresarial-front`).
