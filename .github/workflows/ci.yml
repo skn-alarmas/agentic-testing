@@ -51,7 +51,8 @@ jobs:
         working-directory: /tmp/app
         run: |
           set -e
-          for f in playwright.config.ts TESTING_STANDARDS.md AGENTS.md PROMPTS.md \
+          [ ! -e AGENTS.md ] || { echo "🔴 el kit creó AGENTS.md en la raíz: ese archivo es del repo"; exit 1; }
+          for f in playwright.config.ts TESTING_STANDARDS.md PROMPTS.md docs/qa/CONTRATO-DE-LOS-AGENTES.md \
                    tests/e2e/smoke.spec.ts tests/e2e/fixtures/index.ts \
                    tests/e2e/_helpers/session.ts tests/e2e/_helpers/red.ts \
                    tests/e2e/_helpers/datos.ts tests/e2e/_helpers/evidencia.ts \
@@ -71,11 +72,15 @@ jobs:
           grep -qxF '.e2e-secrets.local' .gitignore
           echo "✅ instalación completa"
 
-      - name: El instalador es idempotente
+      - name: El instalador es idempotente y no pisa el AGENTS.md del repo
         run: |
+          printf '# AGENTS.md\n\nReglas propias de la app.\n' > /tmp/app/AGENTS.md
+          cp /tmp/app/AGENTS.md /tmp/agents-antes.md
           salida="$(bash "$GITHUB_WORKSPACE/setup-testing.sh" /tmp/app --sin-npm)"
           echo "$salida"
           echo "$salida" | grep -q 'Creados:     0' || { echo "🔴 no es idempotente"; exit 1; }
+          cmp -s /tmp/agents-antes.md /tmp/app/AGENTS.md || { echo "🔴 el instalador pisó AGENTS.md"; exit 1; }
+          echo "$salida" | grep -q 'CONTRATO-DE-LOS-AGENTES' || { echo "🔴 no pidió que AGENTS.md apunte al contrato"; exit 1; }
 
       - name: Typecheck de helpers, fixtures y ejemplos
         working-directory: /tmp/app

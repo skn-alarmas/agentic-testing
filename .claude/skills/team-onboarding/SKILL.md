@@ -43,7 +43,7 @@ El instalador es idempotente: nunca pisa un archivo existente sin avisar, y deja
 3. Crea `tests/e2e/_helpers/` con sesión, evidencia, red y datos
 4. Crea `docs/qa/mapa/` y `docs/qa/reportes/`
 5. Copia skills y agentes a `.claude/`
-6. Copia `TESTING_STANDARDS.md`, `AGENTS.md`, `PROMPTS.md`
+6. Copia `TESTING_STANDARDS.md`, `PROMPTS.md` y el contrato de los agentes (`docs/qa/CONTRATO-DE-LOS-AGENTES.md`)
 7. Agrega los scripts npm
 8. Actualiza `.gitignore`
 9. Crea `.e2e-secrets.local.example`

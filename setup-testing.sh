@@ -243,8 +243,23 @@ done
 titulo "7. Documentos del estándar"
 
 copiar TESTING_STANDARDS.md TESTING_STANDARDS.md --siempre
-copiar AGENTS.md            AGENTS.md            --siempre
 copiar PROMPTS.md           PROMPTS.md           --siempre
+
+# El contrato de los agentes va a docs/qa/, al lado de los mapas y los reportes
+# que producen esos agentes. La raíz no se toca: `AGENTS.md` es el archivo que
+# Codex, Cursor y Copilot leen como las reglas del repo —y Claude Code, cuando
+# CLAUDE.md lo importa—, así que es del proyecto, no del kit. Hasta 1.0.1 se
+# pisaba en cada actualización, y un repo con sus reglas ahí las perdía.
+copiar AGENTS.md docs/qa/CONTRATO-DE-LOS-AGENTES.md --siempre
+
+if [ ! -f AGENTS.md ]; then
+  PENDIENTES+=("Este repo no tiene AGENTS.md (las reglas que lee cualquier IA). Si lo creás, que apunte a \`docs/qa/CONTRATO-DE-LOS-AGENTES.md\`")
+elif [ "$(head -n 1 AGENTS.md)" = "$(head -n 1 "$KIT/AGENTS.md")" ]; then
+  aviso "AGENTS.md es la copia del contrato que instalaba el kit hasta 1.0.1 — NO se tocó."
+  PENDIENTES+=("Tu AGENTS.md es el contrato viejo del kit, que ahora vive en \`docs/qa/CONTRATO-DE-LOS-AGENTES.md\`: reemplazalo por las reglas del repo")
+elif ! grep -q "docs/qa/CONTRATO-DE-LOS-AGENTES.md" AGENTS.md; then
+  PENDIENTES+=("Referenciá \`docs/qa/CONTRATO-DE-LOS-AGENTES.md\` desde tu AGENTS.md")
+fi
 
 if [ -f CLAUDE.md ]; then
   aviso "Ya existe CLAUDE.md — NO se pisó."
