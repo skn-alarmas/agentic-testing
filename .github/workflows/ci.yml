@@ -82,6 +82,75 @@ jobs:
           cmp -s /tmp/agents-antes.md /tmp/app/AGENTS.md || { echo "🔴 el instalador pisó AGENTS.md"; exit 1; }
           echo "$salida" | grep -q 'CONTRATO-DE-LOS-AGENTES' || { echo "🔴 no pidió que AGENTS.md apunte al contrato"; exit 1; }
 
+      # El §10 del estándar pide documentar cada excepción en el mismo
+      # TESTING_STANDARDS.md. Actualizar el kit no puede borrarla, y a un repo que
+      # no editó el archivo le tiene que llegar la versión nueva.
+      - name: Actualizar el kit no borra las excepciones de TESTING_STANDARDS.md
+        run: |
+          nueva_app() {
+            mkdir -p "$1" && git -C "$1" init -q
+            echo '{ "name": "app", "version": "1.0.0" }' > "$1/package.json"
+            bash "$GITHUB_WORKSPACE/setup-testing.sh" "$1" --sin-npm >/dev/null
+          }
+          # La próxima versión del kit: esta, con un cambio en el estándar.
+          cp -R "$GITHUB_WORKSPACE" /tmp/kit-nuevo
+          printf '\nRegla nueva del kit.\n' >> /tmp/kit-nuevo/TESTING_STANDARDS.md
+          git -C /tmp/kit-nuevo -c user.name=ci -c user.email=ci@localhost commit -qam "regla nueva"
+
+          nueva_app /tmp/con-excepcion
+          printf '\n> Excepción del repo, con su motivo.\n' >> /tmp/con-excepcion/TESTING_STANDARDS.md
+          cp /tmp/con-excepcion/TESTING_STANDARDS.md /tmp/con-excepcion.md
+
+          bash "$GITHUB_WORKSPACE/setup-testing.sh" /tmp/con-excepcion --sin-npm >/dev/null
+          cmp -s /tmp/con-excepcion.md /tmp/con-excepcion/TESTING_STANDARDS.md \
+            || { echo "🔴 reinstalar la misma versión borró la excepción"; exit 1; }
+
+          salida="$(bash /tmp/kit-nuevo/setup-testing.sh /tmp/con-excepcion --sin-npm)"
+          echo "$salida"
+          cmp -s /tmp/con-excepcion.md /tmp/con-excepcion/TESTING_STANDARDS.md \
+            || { echo "🔴 la versión nueva del kit borró la excepción"; exit 1; }
+          echo "$salida" | grep -q -- '-- TESTING_STANDARDS.md' \
+            || { echo "🔴 no dijo cómo ver lo que cambió el kit en el estándar"; exit 1; }
+
+          # La marca vive en el repo destino: un `commit` que no es un sha no llega a git.
+          printf 'version=1.0.2\ncommit=--output=/tmp/escrito-por-git\n' > /tmp/con-excepcion/.claude/testing-kit.version
+          bash /tmp/kit-nuevo/setup-testing.sh /tmp/con-excepcion --sin-npm >/dev/null
+          if ls /tmp/escrito-por-git* >/dev/null 2>&1; then echo "🔴 la marca le pasó una opción a git"; exit 1; fi
+          cmp -s /tmp/con-excepcion.md /tmp/con-excepcion/TESTING_STANDARDS.md \
+            || { echo "🔴 con una marca inválida se borró la excepción"; exit 1; }
+
+          nueva_app /tmp/sin-editar
+          bash /tmp/kit-nuevo/setup-testing.sh /tmp/sin-editar --sin-npm >/dev/null
+          cmp -s /tmp/kit-nuevo/TESTING_STANDARDS.md /tmp/sin-editar/TESTING_STANDARDS.md \
+            || { echo "🔴 un estándar sin editar no recibió la versión nueva"; exit 1; }
+          echo "✅ las excepciones sobreviven y lo no editado se actualiza"
+
+      # Con AGENTS.md como fuente de las reglas, CLAUDE.md puede ser sólo `@AGENTS.md`.
+      # Para saber si Claude ya tiene el estándar, hay que leer lo que Claude Code carga.
+      - name: Un CLAUDE.md que importa el estándar no recibe una copia aparte
+        run: |
+          mkdir -p /tmp/importa && cd /tmp/importa && git init -q .
+          echo '{ "name": "app", "version": "1.0.0" }' > package.json
+          printf '# CLAUDE.md\n\n@AGENTS.md\n' > CLAUDE.md
+          printf '# AGENTS.md\n\nReglas propias de la app.\n' > AGENTS.md
+          instalar() { bash "$GITHUB_WORKSPACE/setup-testing.sh" /tmp/importa --sin-npm >/dev/null; }
+
+          # Control: nada de lo que carga Claude nombra el estándar, y la copia aparece.
+          instalar
+          [ -f .claude/CLAUDE-testing.md ] || { echo "🔴 no dejó la copia aunque nada nombra el estándar"; exit 1; }
+          rm .claude/CLAUDE-testing.md
+
+          printf '\n- `TESTING_STANDARDS.md` manda sobre cómo se escribe un E2E.\n' >> AGENTS.md
+          instalar
+          [ ! -e .claude/CLAUDE-testing.md ] || { echo "🔴 no siguió el @AGENTS.md de CLAUDE.md"; exit 1; }
+
+          printf '# AGENTS.md\n\nReglas propias de la app.\n' > AGENTS.md
+          mkdir -p .claude/rules
+          printf -- '---\npaths:\n  - "tests/e2e/**"\n---\n\n`TESTING_STANDARDS.md` manda.\n' > .claude/rules/e2e.md
+          instalar
+          [ ! -e .claude/CLAUDE-testing.md ] || { echo "🔴 no leyó .claude/rules/"; exit 1; }
+          echo "✅ lee lo que carga Claude Code: CLAUDE.md, lo que importa y .claude/rules/"
+
       - name: Typecheck de helpers, fixtures y ejemplos
         working-directory: /tmp/app
         run: |

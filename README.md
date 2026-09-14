@@ -175,15 +175,20 @@ Instalado: 1.0.0 → se actualiza a 1.1.0
 
 Qué se pisa y qué no:
 
-| Se sobrescribe siempre | Nunca se pisa |
-|---|---|
-| Skills y agentes (`.claude/`) | `playwright.config.ts` |
-| `TESTING_STANDARDS.md`, `PROMPTS.md` | Helpers y fixtures que hayas tocado |
-| `docs/qa/CONTRATO-DE-LOS-AGENTES.md`, `REFERENCIA.md` | Tus specs y tu `.e2e-secrets.local.example` |
-| | El `AGENTS.md` y el `CLAUDE.md` del repo |
+| Se sobrescribe siempre | Se actualiza si no lo editaste | Nunca se pisa |
+|---|---|---|
+| Skills y agentes (`.claude/`) | `TESTING_STANDARDS.md` | `playwright.config.ts` |
+| `PROMPTS.md`, `REFERENCIA.md` | | Helpers y fixtures que hayas tocado |
+| `docs/qa/CONTRATO-DE-LOS-AGENTES.md` | | Tus specs y tu `.e2e-secrets.local.example` |
+| | | El `AGENTS.md` y el `CLAUDE.md` del repo |
 
 Si un archivo tuyo difiere del template, el instalador **no lo toca** y te dice
 cómo compararlo. Para forzar la actualización de todo: `--forzar` (deja `.bak`).
+
+`TESTING_STANDARDS.md` es donde van las excepciones del repo (§10), así que se
+actualiza sólo si es el que instaló tu versión anterior del kit. Si lo editaste,
+queda como está y, si el kit también lo cambió, el instalador te da el `git diff`
+para traer ese cambio a mano.
 
 ## Contribuir al kit
 
