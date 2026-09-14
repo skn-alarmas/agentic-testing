@@ -70,7 +70,8 @@ DESTINO="$(cd "${DESTINO:-$PWD}" && pwd)"
 
 MARCA_VERSION="$DESTINO/.claude/testing-kit.version"
 VERSION_PREVIA="$(sed -n 's/^version=//p' "$MARCA_VERSION" 2>/dev/null || true)"
-COMMIT_PREVIO="$(sed -n 's/^commit=//p' "$MARCA_VERSION" 2>/dev/null || true)"
+# Sólo un sha: la marca vive en el repo destino, y el valor termina como argumento de git.
+COMMIT_PREVIO="$(sed -n 's/^commit=\([0-9a-f]\{4,40\}\)$/\1/p' "$MARCA_VERSION" 2>/dev/null || true)"
 
 titulo "Kit de testing agentic $VERSION_KIT ($COMMIT_KIT)"
 printf '%sKit:     %s%s\n' "$GRIS" "$KIT" "$FIN"

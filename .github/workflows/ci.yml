@@ -112,6 +112,13 @@ jobs:
           echo "$salida" | grep -q -- '-- TESTING_STANDARDS.md' \
             || { echo "🔴 no dijo cómo ver lo que cambió el kit en el estándar"; exit 1; }
 
+          # La marca vive en el repo destino: un `commit` que no es un sha no llega a git.
+          printf 'version=1.0.2\ncommit=--output=/tmp/escrito-por-git\n' > /tmp/con-excepcion/.claude/testing-kit.version
+          bash /tmp/kit-nuevo/setup-testing.sh /tmp/con-excepcion --sin-npm >/dev/null
+          if ls /tmp/escrito-por-git* >/dev/null 2>&1; then echo "🔴 la marca le pasó una opción a git"; exit 1; fi
+          cmp -s /tmp/con-excepcion.md /tmp/con-excepcion/TESTING_STANDARDS.md \
+            || { echo "🔴 con una marca inválida se borró la excepción"; exit 1; }
+
           nueva_app /tmp/sin-editar
           bash /tmp/kit-nuevo/setup-testing.sh /tmp/sin-editar --sin-npm >/dev/null
           cmp -s /tmp/kit-nuevo/TESTING_STANDARDS.md /tmp/sin-editar/TESTING_STANDARDS.md \
