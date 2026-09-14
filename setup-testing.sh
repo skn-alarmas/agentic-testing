@@ -70,6 +70,7 @@ DESTINO="$(cd "${DESTINO:-$PWD}" && pwd)"
 
 MARCA_VERSION="$DESTINO/.claude/testing-kit.version"
 VERSION_PREVIA="$(sed -n 's/^version=//p' "$MARCA_VERSION" 2>/dev/null || true)"
+COMMIT_PREVIO="$(sed -n 's/^commit=//p' "$MARCA_VERSION" 2>/dev/null || true)"
 
 titulo "Kit de testing agentic $VERSION_KIT ($COMMIT_KIT)"
 printf '%sKit:     %s%s\n' "$GRIS" "$KIT" "$FIN"
@@ -88,12 +89,43 @@ cd "$DESTINO"
 # ─── Utilidades ──────────────────────────────────────────────────────────
 ejecutar() { [ "$DRY_RUN" = 1 ] && { printf '%s   $ %s%s\n' "$GRIS" "$*" "$FIN"; return 0; }; "$@"; }
 
-# copiar <origen-relativo-al-kit> <destino-relativo> [--siempre]
+# El <ruta-en-el-kit> que instaló la versión anterior del kit, según el commit
+# anotado en .claude/testing-kit.version. Falla si no se puede saber: sin marca,
+# un kit sin git, o un commit que este clon del kit no tiene.
+anterior_del_kit() {
+  [ -n "$COMMIT_PREVIO" ] && git -C "$KIT" show "$COMMIT_PREVIO:$1" 2>/dev/null
+}
+
+# copiar <origen-relativo-al-kit> <destino-relativo> [--siempre | --si-no-lo-editaron]
+#
+# Sin modo, un archivo que ya existe no se toca. --siempre lo pisa (deja .bak):
+# es del kit. --si-no-lo-editaron lo pisa sólo si es el que instaló la versión
+# anterior del kit; si el repo lo editó, lo respeta y dice qué cambió el kit.
 copiar() {
-  local origen="$KIT/$1" destino="$DESTINO/$2" siempre="${3:-}"
+  local origen="$KIT/$1" destino="$DESTINO/$2" modo="${3:-}"
   [ -f "$origen" ] || { error "Falta en el kit: $1"; return 1; }
 
-  if [ -f "$destino" ] && [ "$siempre" != "--siempre" ] && [ "$FORZAR" != 1 ]; then
+  if [ -f "$destino" ] && [ "$modo" = "--si-no-lo-editaron" ] && [ "$FORZAR" != 1 ] \
+     && ! cmp -s "$origen" "$destino"; then
+    if ! anterior_del_kit "$1" >/dev/null; then
+      OMITIDOS+=("$2")
+      aviso "$2 difiere del kit y no hay cómo saber si el repo lo editó — NO se pisó."
+      PENDIENTES+=("Compará \`$2\` con el del kit (diff '$origen' '$destino'); si no tiene nada del repo: cp '$origen' '$destino'")
+      return 0
+    fi
+    if ! anterior_del_kit "$1" | cmp -s - "$destino"; then
+      if anterior_del_kit "$1" | cmp -s - "$origen"; then
+        info "$2 (con cambios del repo; el kit no lo cambió desde $COMMIT_PREVIO)"
+      else
+        OMITIDOS+=("$2")
+        aviso "$2 tiene cambios del repo — NO se pisó."
+        PENDIENTES+=("Traé a \`$2\` lo que cambió el kit desde tu versión: git -C '$KIT' diff $COMMIT_PREVIO -- $1")
+      fi
+      return 0
+    fi
+  fi
+
+  if [ -f "$destino" ] && [ -z "$modo" ] && [ "$FORZAR" != 1 ]; then
     if cmp -s "$origen" "$destino"; then
       info "$2 (ya estaba, idéntico)"
     else
@@ -242,7 +274,10 @@ done
 # ─── 7. Documentos del estándar ──────────────────────────────────────────
 titulo "7. Documentos del estándar"
 
-copiar TESTING_STANDARDS.md TESTING_STANDARDS.md --siempre
+# El §10 del estándar pide documentar cada excepción en el mismo archivo, así que
+# TESTING_STANDARDS.md lleva cosas del repo. Hasta 1.0.2 se pisaba en cada
+# actualización y las excepciones se perdían, con un `.bak` como único rastro.
+copiar TESTING_STANDARDS.md TESTING_STANDARDS.md --si-no-lo-editaron
 copiar PROMPTS.md           PROMPTS.md           --siempre
 
 # El contrato de los agentes va a docs/qa/, al lado de los mapas y los reportes
@@ -261,11 +296,51 @@ elif ! grep -q "docs/qa/CONTRATO-DE-LOS-AGENTES.md" AGENTS.md; then
   PENDIENTES+=("Referenciá \`docs/qa/CONTRATO-DE-LOS-AGENTES.md\` desde tu AGENTS.md")
 fi
 
+# Los archivos que Claude Code carga como instrucciones del repo: CLAUDE.md, lo
+# que importa con `@ruta` (fuera de bloques de código, hasta cinco saltos) y
+# .claude/rules/. Hasta 1.0.2 se miraba sólo CLAUDE.md, y uno que dice sólo
+# `@AGENTS.md` parecía no nombrar el estándar aunque AGENTS.md lo nombrara.
+instrucciones_de_claude() {
+  local cola="CLAUDE.md" siguiente archivo dir ruta vistos="|" salto=0
+  if [ -d .claude/rules ]; then
+    cola="$cola"$'\n'"$(find .claude/rules -type f -name '*.md')"
+  fi
+  while [ -n "$cola" ] && [ "$salto" -le 5 ]; do
+    siguiente=""
+    while IFS= read -r archivo; do
+      [ -f "$archivo" ] || continue
+      case "$vistos" in *"|$archivo|"*) continue ;; esac
+      vistos="$vistos$archivo|"
+      printf '%s\n' "$archivo"
+      dir="$(dirname "$archivo")"
+      while IFS= read -r ruta; do
+        case "$ruta" in
+          /*) ;;
+          \~/*) ruta="$HOME/${ruta#\~/}" ;;
+          *) ruta="$dir/$ruta" ;;
+        esac
+        siguiente="$siguiente$ruta"$'\n'
+      done < <(awk '/^[ \t]*(```|~~~)/ { codigo = !codigo; next }
+                    !codigo { for (i = 1; i <= NF; i++) if ($i ~ /^@[^@]/) print substr($i, 2) }' "$archivo")
+    done <<< "$cola"
+    cola="$siguiente"
+    salto=$((salto + 1))
+  done
+}
+
+nombra_el_estandar() {
+  local archivo
+  while IFS= read -r archivo; do
+    grep -q "TESTING_STANDARDS" "$archivo" && return 0
+  done < <(instrucciones_de_claude)
+  return 1
+}
+
 if [ -f CLAUDE.md ]; then
   aviso "Ya existe CLAUDE.md — NO se pisó."
-  if ! grep -q "TESTING_STANDARDS" CLAUDE.md 2>/dev/null; then
+  if ! nombra_el_estandar; then
     copiar CLAUDE.md .claude/CLAUDE-testing.md --siempre
-    PENDIENTES+=("Fusionar \`.claude/CLAUDE-testing.md\` dentro de tu CLAUDE.md (o referenciarlo)")
+    PENDIENTES+=("Fusionar \`.claude/CLAUDE-testing.md\` con las reglas del repo (tu CLAUDE.md, o el AGENTS.md que importa), o referenciarlo")
   fi
 else
   copiar CLAUDE.md CLAUDE.md

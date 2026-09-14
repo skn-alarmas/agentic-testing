@@ -16,6 +16,27 @@ versión venís y el instalador avisa el salto.
 
 ---
 
+## [1.0.3] — 2026-09-14
+
+Correcciones salidas de actualizar `gestion-empresarial-front` a 1.0.2.
+
+### Corregido
+
+- **El instalador ya no borra las excepciones de `TESTING_STANDARDS.md`.** El §10
+  del estándar pide documentar cada excepción en ese mismo archivo, y el instalador
+  lo pisaba en cada actualización, con un `.bak` como único rastro. Ahora lo
+  actualiza sólo si es el que instaló la versión anterior del kit (el `commit` de
+  `.claude/testing-kit.version`). Si el repo lo editó, lo deja como está, y si
+  además el kit lo cambió, da el `git diff` para traer ese cambio a mano. `--forzar`
+  lo sigue pisando.
+- **Un `CLAUDE.md` que importa `AGENTS.md` ya no recibe `.claude/CLAUDE-testing.md`.**
+  Para decidir si hacía falta esa copia, el instalador buscaba `TESTING_STANDARDS`
+  sólo en `CLAUDE.md`, y con `AGENTS.md` como fuente de las reglas, `CLAUDE.md` puede
+  ser una sola línea: `@AGENTS.md`. Ahora lee lo que carga Claude Code: `CLAUDE.md`,
+  lo que importa con `@ruta` y `.claude/rules/`.
+
+---
+
 ## [1.0.2] — 2026-09-14
 
 ### Corregido
